@@ -28,29 +28,16 @@ with tab1:
         risk_amount = account_size * risk_percent / 100
 
     with col2:
-        direction = st.selectbox("Direction", ["Long", "Short"])
-        entry = st.number_input("Prix d'entrée", value=50.0, step=0.01)
-        stop = st.number_input("Stop loss", value=48.0, step=0.01)
+    direction = st.selectbox("Direction", ["Long", "Short"])
+    entry = st.number_input("Prix d'entrée", value=50.0, step=0.01)
+    stop_risk_pct = st.number_input("Distance du stop (%)", value=2.0, step=0.1)
 
     if direction == "Long":
-        risk_per_share = entry - stop
+        stop = entry * (1 - stop_risk_pct / 100)
     else:
-        risk_per_share = stop - entry
+        stop = entry * (1 + stop_risk_pct / 100)
 
-    if risk_per_share <= 0:
-        st.error("Stop invalide.")
-    else:
-        shares = math.floor(risk_amount / risk_per_share)
-        position_value = shares * entry
-        real_risk = shares * risk_per_share
-
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Risque $", f"${risk_amount:,.2f}")
-        c2.metric("Risque/action", f"${risk_per_share:.2f}")
-        c3.metric("Actions", f"{shares:,}")
-        c4.metric("Position", f"${position_value:,.2f}")
-
-        st.success(f"Tu peux prendre environ **{shares:,} actions**.")
+    st.metric("Stop calculé", f"${stop:.2f}")
 
 # =========================
 # TAB 2 — SCÉNARIOS STOPS
