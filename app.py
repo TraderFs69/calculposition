@@ -120,13 +120,17 @@ with tab4:
     capital_day = st.number_input("Capital du compte", value=25000.0, step=500.0, key="day_cap")
     max_day_risk_pct = st.number_input("Risque journalier max (%)", value=3.0, step=0.25)
     risk_trade_pct = st.number_input("Risque par trade (%)", value=1.0, step=0.1, key="day_trade")
-    losses_taken = st.number_input("Pertes déjà prises aujourd'hui", min_value=0, value=0, step=1)
+    losses_taken = st.number_input(
+    "Pertes déjà prises aujourd'hui ($)",
+    min_value=0.0,
+    value=0.0,
+    step=25.0
+)
 
-    max_day_risk = capital_day * max_day_risk_pct / 100
-    risk_per_trade = capital_day * risk_trade_pct / 100
-    used_risk = losses_taken * risk_per_trade
-    remaining = max_day_risk - used_risk
-
+max_day_risk = capital_day * max_day_risk_pct / 100
+risk_per_trade = capital_day * risk_trade_pct / 100
+used_risk = losses_taken
+remaining = max_day_risk - used_risk
     c1, c2, c3 = st.columns(3)
     c1.metric("Risque max/jour", f"${max_day_risk:,.2f}")
     c2.metric("Risque utilisé", f"${used_risk:,.2f}")
