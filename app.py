@@ -1,80 +1,183 @@
 import streamlit as st
 import math
+import pandas as pd
 
-st.set_page_config(page_title="Calculateur de position", layout="wide")
+st.set_page_config(page_title="TEA Trading Toolkit", layout="wide")
 
-st.title("📊 Calculateur de taille de position")
+st.title("📊 TEA Trading Toolkit")
 
-st.markdown("Calcule rapidement combien d’actions prendre selon ton risque.")
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "Position Size",
+    "Scénarios Stops",
+    "Targets en R",
+    "Risque Journalier",
+    "Kelly"
+])
 
 # =========================
-# INPUTS
+# TAB 1 — POSITION SIZE
 # =========================
-col1, col2 = st.columns(2)
+with tab1:
+    st.header("📌 Calculateur de position")
 
-with col1:
-    account_size = st.number_input("Capital du compte ($)", min_value=0.0, value=25000.0, step=500.0)
-    risk_mode = st.selectbox("Mode de risque", ["Pourcentage", "Montant fixe"])
-    
-    if risk_mode == "Pourcentage":
-        risk_percent = st.number_input("Risque par trade (%)", min_value=0.0, value=1.0, step=0.1)
-        risk_amount = account_size * (risk_percent / 100)
+    col1, col2 = st.columns(2)
+
+    with col1:
+        account_size = st.number_input("Capital du compte ($)", value=25000.0, step=500.0)
+        risk_percent = st.number_input("Risque par trade (%)", value=1.0, step=0.1)
+        risk_amount = account_size * risk_percent / 100
+
+    with col2:
+        direction = st.selectbox("Direction", ["Long", "Short"])
+        entry = st.number_input("Prix d'entrée", value=50.0, step=0.01)
+        stop = st.number_input("Stop loss", value=48.0, step=0.01)
+
+    if direction == "Long":
+        risk_per_share = entry - stop
     else:
-        risk_amount = st.number_input("Risque par trade ($)", min_value=0.0, value=250.0, step=25.0)
+        risk_per_share = stop - entry
 
-with col2:
-    direction = st.selectbox("Type de trade", ["Long", "Short"])
-    entry_price = st.number_input("Prix d’entrée ($)", min_value=0.0, value=50.0, step=0.01)
-    stop_price = st.number_input("Prix du stop ($)", min_value=0.0, value=48.0, step=0.01)
-    target_price = st.number_input("Prix cible / target ($)", min_value=0.0, value=54.0, step=0.01)
-
-# =========================
-# CALCULS
-# =========================
-if direction == "Long":
-    risk_per_share = entry_price - stop_price
-    reward_per_share = target_price - entry_price
-else:
-    risk_per_share = stop_price - entry_price
-    reward_per_share = entry_price - target_price
-
-# =========================
-# OUTPUT
-# =========================
-st.divider()
-
-if risk_per_share <= 0:
-    st.error("⚠️ Le stop n’est pas valide pour ce type de trade.")
-else:
-    shares = math.floor(risk_amount / risk_per_share)
-    position_value = shares * entry_price
-    max_loss = shares * risk_per_share
-    potential_gain = shares * reward_per_share if reward_per_share > 0 else 0
-    rr = reward_per_share / risk_per_share if reward_per_share > 0 else 0
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric("Risque total", f"${risk_amount:,.2f}")
-    c2.metric("Risque / action", f"${risk_per_share:.2f}")
-    c3.metric("Nombre d’actions", f"{shares:,}")
-    c4.metric("Valeur position", f"${position_value:,.2f}")
-
-    st.subheader("📈 Résumé du trade")
-
-    st.write(f"**Type :** {direction}")
-    st.write(f"**Entrée :** ${entry_price:.2f}")
-    st.write(f"**Stop :** ${stop_price:.2f}")
-    st.write(f"**Target :** ${target_price:.2f}")
-    st.write(f"**Perte maximale réelle :** ${max_loss:,.2f}")
-    st.write(f"**Gain potentiel :** ${potential_gain:,.2f}")
-    st.write(f"**Ratio R:R :** {rr:.2f}")
-
-    if rr < 1:
-        st.warning("⚠️ Ratio risque/rendement faible.")
-    elif rr >= 2:
-        st.success("✅ Excellent ratio risque/rendement.")
+    if risk_per_share <= 0:
+        st.error("Stop invalide.")
     else:
-        st.info("ℹ️ Ratio acceptable.")
+        shares = math.floor(risk_amount / risk_per_share)
+        position_value = shares * entry
+        real_risk = shares * risk_per_share
 
-    if position_value > account_size:
-        st.warning("⚠️ La valeur de la position dépasse ton capital disponible.")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Risque $", f"${risk_amount:,.2f}")
+        c2.metric("Risque/action", f"${risk_per_share:.2f}")
+        c3.metric("Actions", f"{shares:,}")
+        c4.metric("Position", f"${position_value:,.2f}")
+
+        st.success(f"Tu peux prendre environ **{shares:,} actions**.")
+
+# =========================
+# TAB 2 — SCÉNARIOS STOPS
+# =========================
+with tab2:
+    st.header("📉 Scénarios de stops")
+
+    account = st.number_input("Capital ($)", value=25000.0, step=500.0, key="sc_account")
+    risk_pct = st.number_input("Risque (%)", value=1.0, step=0.1, key="sc_risk")
+    entry_sc = st.number_input("Entrée", value=50.0, step=0.01, key="sc_entry")
+
+    stops_text = st.text_area(
+        "Stops à tester, un par ligne",
+        "49.80\n49.50\n49.00\n48.50"
+    )
+
+    risk_dollars = account * risk_pct / 100
+    rows = []
+
+    for s in stops_text.splitlines():
+        try:
+            stop_val = float(s.strip())
+            risk_ps = abs(entry_sc - stop_val)
+
+            if risk_ps > 0:
+                shares = math.floor(risk_dollars / risk_ps)
+                rows.append({
+                    "Stop": stop_val,
+                    "Risque/action": round(risk_ps, 2),
+                    "Actions": shares,
+                    "Valeur position": round(shares * entry_sc, 2),
+                    "Risque réel": round(shares * risk_ps, 2)
+                })
+        except:
+            pass
+
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+
+# =========================
+# TAB 3 — TARGETS EN R
+# =========================
+with tab3:
+    st.header("🎯 Targets en R")
+
+    direction_r = st.selectbox("Direction", ["Long", "Short"], key="r_dir")
+    entry_r = st.number_input("Entrée", value=50.0, step=0.01, key="r_entry")
+    stop_r = st.number_input("Stop", value=48.0, step=0.01, key="r_stop")
+
+    if direction_r == "Long":
+        risk_r = entry_r - stop_r
+    else:
+        risk_r = stop_r - entry_r
+
+    if risk_r <= 0:
+        st.error("Stop invalide.")
+    else:
+        targets = []
+
+        for r in [1, 1.5, 2, 3, 4, 5]:
+            if direction_r == "Long":
+                target = entry_r + r * risk_r
+            else:
+                target = entry_r - r * risk_r
+
+            targets.append({
+                "R": f"{r}R",
+                "Target": round(target, 2),
+                "Gain/action": round(abs(target - entry_r), 2)
+            })
+
+        st.dataframe(pd.DataFrame(targets), use_container_width=True)
+
+# =========================
+# TAB 4 — RISQUE JOURNALIER
+# =========================
+with tab4:
+    st.header("⚠️ Gestion du risque journalier")
+
+    capital_day = st.number_input("Capital du compte", value=25000.0, step=500.0, key="day_cap")
+    max_day_risk_pct = st.number_input("Risque journalier max (%)", value=3.0, step=0.25)
+    risk_trade_pct = st.number_input("Risque par trade (%)", value=1.0, step=0.1, key="day_trade")
+    losses_taken = st.number_input("Pertes déjà prises aujourd'hui", min_value=0, value=0, step=1)
+
+    max_day_risk = capital_day * max_day_risk_pct / 100
+    risk_per_trade = capital_day * risk_trade_pct / 100
+    used_risk = losses_taken * risk_per_trade
+    remaining = max_day_risk - used_risk
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Risque max/jour", f"${max_day_risk:,.2f}")
+    c2.metric("Risque utilisé", f"${used_risk:,.2f}")
+    c3.metric("Risque restant", f"${remaining:,.2f}")
+
+    if remaining <= 0:
+        st.error("Stop trading pour aujourd'hui.")
+    elif remaining < risk_per_trade:
+        st.warning("Tu n'as plus assez de risque pour un trade complet.")
+    else:
+        st.success("Tu peux encore trader selon ton plan.")
+
+# =========================
+# TAB 5 — KELLY
+# =========================
+with tab5:
+    st.header("🧠 Kelly Criterion")
+
+    win_rate = st.number_input("Win rate (%)", value=50.0, step=1.0)
+    avg_win = st.number_input("Gain moyen ($)", value=300.0, step=25.0)
+    avg_loss = st.number_input("Perte moyenne ($)", value=200.0, step=25.0)
+
+    p = win_rate / 100
+    q = 1 - p
+
+    if avg_loss <= 0:
+        st.error("Perte moyenne invalide.")
+    else:
+        b = avg_win / avg_loss
+        kelly = p - (q / b)
+        half_kelly = kelly / 2
+
+        st.metric("Kelly optimal", f"{kelly * 100:.2f}%")
+        st.metric("Demi-Kelly prudent", f"{half_kelly * 100:.2f}%")
+
+        if kelly <= 0:
+            st.error("Système non rentable selon Kelly.")
+        elif kelly > 0.05:
+            st.warning("Kelly est agressif. Utiliser demi-Kelly ou moins.")
+        else:
+            st.success("Risque raisonnable.")
